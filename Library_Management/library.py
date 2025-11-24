@@ -1,9 +1,7 @@
-# library.py
 import json
 from pathlib import Path
 from book import Book
 import logging
-
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 

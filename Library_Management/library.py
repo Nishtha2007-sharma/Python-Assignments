@@ -1,23 +1,32 @@
+# library.py
+import json
+from pathlib import Path
 from book import Book
-import os
+import logging
+
+
+logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
 class Library:
-    def __init__(self, storage_path="library.txt"):
-        self.storage_path = storage_path
+    def __init__(self, storage_path="catalog.json"):
+        self.storage_path = Path(storage_path)
         self.books = []
         self.load_from_file()
 
     def add_book(self, book):
         if self.find_by_isbn(book.isbn):
+            logging.error("Attempted to add duplicate ISBN.")
             raise ValueError("A book with this ISBN already exists.")
         self.books.append(book)
+        logging.info(f"Book added: {book.title}")
+        self.save_to_file()
 
     def display_all_books(self):
         if not self.books:
-            print("No books in library.")
+            print("No books found.")
             return
-        for i, book in enumerate(self.books, start=1):
-            print(f"{i}. {book}")
+        for book in self.books:
+            print(book)
 
     def find_by_isbn(self, isbn):
         for book in self.books:
@@ -32,44 +41,55 @@ class Library:
     def issue_book(self, isbn):
         book = self.find_by_isbn(isbn)
         if not book:
+            logging.error("Issue attempt on non-existent book.")
             raise LookupError("Book not found.")
         if book.status == "Issued":
-            raise RuntimeError("Book is already issued.")
+            logging.error("Issue attempt on already issued book.")
+            raise RuntimeError("Book already issued.")
         book.update_status("Issued")
+        logging.info(f"Book issued: {book.title}")
         self.save_to_file()
         return book
 
     def return_book(self, isbn):
         book = self.find_by_isbn(isbn)
         if not book:
+            logging.error("Return attempt on non-existent book.")
             raise LookupError("Book not found.")
         if book.status == "Available":
+            logging.error("Return attempt on book not issued.")
             raise RuntimeError("Book is not issued.")
         book.update_status("Available")
+        logging.info(f"Book returned: {book.title}")
         self.save_to_file()
         return book
 
     def save_to_file(self):
+        data = []
+        for book in self.books:
+            data.append({
+                "title": book.title,
+                "author": book.author,
+                "isbn": book.isbn,
+                "status": book.status
+            })
         try:
-            with open(self.storage_path, "w", encoding="utf-8") as f:
-                for book in self.books:
-                    f.write(book.to_record() + "\n")
+            self.storage_path.write_text(json.dumps(data, indent=2))
+            logging.info("Catalog saved successfully.")
         except Exception as e:
-            print("Error saving to file:", e)
+            logging.error(f"Error saving file: {e}")
 
     def load_from_file(self):
-        if not os.path.exists(self.storage_path):
+        if not self.storage_path.exists():
+            logging.warning("Catalog file missing. Starting with empty library.")
             self.books = []
             return
         try:
-            with open(self.storage_path, "r", encoding="utf-8") as f:
-                lines = f.readlines()
-            self.books = []
-            for line in lines:
-                book = Book.from_record(line)
-                if book:
-                    self.books.append(book)
+            content = self.storage_path.read_text()
+            data = json.loads(content)
+            self.books = [Book(item["title"], item["author"], item["isbn"], item["status"]) for item in data]
+            logging.info("Catalog loaded successfully.")
         except Exception as e:
-            print("Error loading file (file might be corrupted). Starting with empty library.")
-            print("Details:", e)
+            logging.error("Catalog corrupted. Starting fresh.")
+            print("File corrupted. Loading empty library.")
             self.books = []
